@@ -1,8 +1,8 @@
 NOTICE: THIS PROJECT IS USE FOR STUDY AND RESEARCH PURPOSES ONLY!
 
 Using Visual Studio to open .sln file and complie project.
-Payload in .c file: meterpreter reverse_tcp 192.168.56.129:7777
-Change payload yourself with any .bin file. Remember to convert payload to ipv6fuscation using HellShell.exe
+Payload in .c file: meterpreter reverse_tcp 192.168.56.129:7777.
+Change payload yourself with any .bin file. Remember to convert payload to ipv6fuscation using HellShell.exe.
 
 Some Features:
 1. Payload obfuscation (static scan evasion).
